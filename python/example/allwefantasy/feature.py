@@ -3,7 +3,8 @@ from random import Random
 
 import pyspark.sql.functions as F
 from pyspark import SparkConf
-from pyspark.ml.feature import ImputerModel
+from pyspark.ml.feature import ImputerModel, MinMaxScaler, MaxAbsScaler, QuantileDiscretizer
+from pyspark.ml.linalg import VectorUDT
 from pyspark.sql.types import *
 
 from example.allwefantasy.base.spark_base import _SparkBase
@@ -70,10 +71,118 @@ class FeatureExample(_SparkBase):
 
         kill_outlier()
 
+    def word2vec(self):
+        from pyspark.ml.feature import Word2Vec
+
+        documentDF = self.session.createDataFrame([
+            ("Hi I heard about Spark".split(" "),),
+            ("I wish Java could use case classes".split(" "),),
+            ("Logistic regression models are neat".split(" "),)
+        ], ["text"])
+
+        word2Vec = Word2Vec(vectorSize=3, minCount=0, inputCol="text", outputCol="result")
+        model = word2Vec.fit(documentDF)
+
+        # transform 其实只是做了个词向量求平均
+        result = model.transform(documentDF)
+        for row in result.collect():
+            text, vector = row
+            print("Text: [%s] => \nVector: %s\n" % (", ".join(text), str(vector)))
+
+        # 如果我希望把向量都拿出，以后在用呢？
+        res = dict([(item["word"], item["vector"].toArray()) for item in model.getVectors().collect()])
+        print(res["heard"])
+
+    def normalize(self):
+        from pyspark.ml.feature import Normalizer
+        from pyspark.ml.linalg import Vectors
+
+        df = self.session.createDataFrame([
+            (0, [1.0, 0.5, -1.0]),
+            (1, [2.0, 1.0, 1.0]),
+            (2, [4.0, 10.0, 2.0])
+        ], ["id", "features"])
+
+        # Vector概念解释
+        @F.udf(returnType=VectorUDT())
+        def vectorize_from_array(a):
+            return Vectors.dense(a)
+
+        df = df.withColumn("features", vectorize_from_array(F.col("features")))
+        # Normalize each Vector using $L^1$ norm.
+        normalizer = Normalizer(inputCol="features", outputCol="normFeatures", p=1.0)
+        l1NormData = normalizer.transform(df)
+        print("Normalized using L^1 norm")
+        l1NormData.show()
+
+        # Normalize each Vector using $L^\infty$ norm.
+        lInfNormData = normalizer.transform(df, {normalizer.p: float("inf")})
+        print("Normalized using L^inf norm")
+        lInfNormData.show()
+
+    # PySpark 提供了三种对列标准化的模式
+    def standardScaler(self):
+        from pyspark.ml.feature import StandardScaler
+
+        dataFrame = self.session.read.format("libsvm").load(self.dataDir + "/data/mllib/sample_libsvm_data.txt")
+        scaler = StandardScaler(inputCol="features", outputCol="scaledFeatures",
+                                withStd=True, withMean=False)
+
+        scalerModel = scaler.fit(dataFrame)
+        scaledData = scalerModel.transform(dataFrame)
+        scaledData.show()
+
+        scaler = MinMaxScaler(inputCol="features", outputCol="scaledFeatures")
+
+        # Compute summary statistics and generate MinMaxScalerModel
+        scalerModel = scaler.fit(dataFrame)
+
+        # rescale each feature to range [min, max].
+        scaledData = scalerModel.transform(dataFrame)
+        print("Features scaled to range: [%f, %f]" % (scaler.getMin(), scaler.getMax()))
+        scaledData.select("features", "scaledFeatures").show()
+
+        scaler = MaxAbsScaler(inputCol="features", outputCol="scaledFeatures")
+
+        # Compute summary statistics and generate MaxAbsScalerModel
+        scalerModel = scaler.fit(dataFrame)
+
+        # rescale each feature to range [-1, 1].
+        scaledData = scalerModel.transform(dataFrame)
+
+        scaledData.select("features", "scaledFeatures").show()
+
+    def discrete(self):
+        # Bucketizer
+        from pyspark.ml.feature import Bucketizer
+
+        splits = [-float("inf"), -0.5, 0.0, 0.5, float("inf")]
+
+        data = [(-999.9,), (-0.5,), (-0.3,), (0.0,), (0.2,), (999.9,)]
+        dataFrame = self.session.createDataFrame(data, ["features"])
+
+        bucketizer = Bucketizer(splits=splits, inputCol="features", outputCol="bucketedFeatures")
+
+        # Transform original data into its bucket index.
+        bucketedData = bucketizer.transform(dataFrame)
+
+        print("Bucketizer output with %d buckets" % (len(bucketizer.getSplits()) - 1))
+        bucketedData.show()
+
+        # QuantileDiscretizer
+
+        data = [(0, 18.0), (1, 19.0), (2, 8.0), (3, 5.0), (4, 2.2)]
+        df = self.createDataFrame(data, ["id", "hour"])
+
+        discretizer = QuantileDiscretizer(numBuckets=3, inputCol="hour", outputCol="result")
+
+        result = discretizer.fit(df).transform(df)
+        result.show()
+
 
 if __name__ == '__main__':
     conf = SparkConf()
     conf.set("spark.sql.execution.arrow.enabled", "true")
     FeatureExample.start(conf=conf)
-    FeatureExample().impute()
+    FeatureExample().standardScaler()
     FeatureExample.shutdown()
