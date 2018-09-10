@@ -74,6 +74,7 @@ documentDF = session.createDataFrame([
 documentDF.withColumn("analized_text", lcut_udf(F.col("text"))).show()
 
 # print("-----{}".format(os.listdir(baseDir)))
+# # zip包目录结构
 # from job.job import Job
 #
 # print("-----{}".format(Job()))
