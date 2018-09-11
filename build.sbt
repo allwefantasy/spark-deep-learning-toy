@@ -36,7 +36,6 @@ sparkComponents ++= Seq("mllib-local", "mllib", "sql")
 // e.g. spDependencies += "databricks/spark-avro:0.1"
 spDependencies += s"databricks/tensorframes:0.5.0-s_${scalaMajorVersion}"
 
-
 libraryDependencies ++= Seq(
   // Update to scala-logging 3.9.0 after we update TensorFrames.
   "com.typesafe.scala-logging" %% "scala-logging-api" % "2.1.2",
@@ -44,7 +43,11 @@ libraryDependencies ++= Seq(
   // Matching scalatest versions from TensorFrames
   "org.scalactic" %% "scalactic" % "3.0.0" % "test",
   "org.scalatest" %% "scalatest" % "3.0.0" % "test"
+
 )
+
+libraryDependencies += "graphframes" % "graphframes" % "0.6.0-spark2.3-s_2.11"
+libraryDependencies += "com.typesafe.scala-logging" %% "scala-logging" % "3.9.0"
 
 assemblyMergeStrategy in assembly := {
   case "requirements.txt" => MergeStrategy.concat
@@ -55,12 +58,12 @@ assemblyMergeStrategy in assembly := {
 
 parallelExecution := false
 
-scalacOptions in (Compile, doc) ++= Seq(
+scalacOptions in(Compile, doc) ++= Seq(
   "-groups",
   "-implicits",
   "-skip-packages", Seq("org.apache.spark").mkString(":"))
 
-scalacOptions in (Test, doc) ++= Seq("-groups", "-implicits")
+scalacOptions in(Test, doc) ++= Seq("-groups", "-implicits")
 
 // This fixes a class loader problem with scala.Tuple2 class, scala-2.11, Spark 2.x
 fork in Test := true
