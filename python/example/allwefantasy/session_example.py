@@ -1,9 +1,9 @@
 from pyspark.sql import SparkSession
 import logging
 import os
-
 from pyspark.sql.types import *
 
+os.environ["PYSPARK_PYTHON"] = "/Users/allwefantasy/deepavlovpy3/bin/python3"
 logger = logging.getLogger(__name__)
 
 base_dir = "/Users/allwefantasy/CSDNWorkSpace/spark-deep-learning_latest"
