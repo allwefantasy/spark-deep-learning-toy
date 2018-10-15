@@ -25,3 +25,5 @@ project/plugins/project/
 
 # MacOS
 .DS_Store
+/data/cifar
+/data/cifar.tgz

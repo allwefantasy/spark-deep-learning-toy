@@ -1,64 +1,42 @@
-from pyspark.ml.linalg import Vectors, SparseVector
 from pyspark.sql import SparkSession
 import logging
-
-from pyspark.sql.types import StructField, StructType, BinaryType, StringType, ArrayType, ByteType
 import os
-import pickle
-import codecs
-import xgboost as xgb
-import numpy as np
+from pyspark.ml.classification import LogisticRegression
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.ml import Pipeline
+from pyspark.sql import functions as F
+from sparkdl import DeepImageFeaturizer
+from sparkdl.image import imageIO as imageIO
+from pyspark.ml.image import ImageSchema
 
 os.environ["PYSPARK_PYTHON"] = "/Users/allwefantasy/deepavlovpy3/bin/python3"
 logger = logging.getLogger(__name__)
 
-base_dir = "/Users/allwefantasy/CSDNWorkSpace/spark-deep-learning_latest"
+base_dir = "/Users/allwefantasy/CSDNWorkSpace/spark-deep-learning_latest/data/cifar/test"
 spark = SparkSession.builder.master("local[*]").appName("example").getOrCreate()
 
-## xgboost 的使用和Sklearn是高度一致的。
-data = spark.read.format("libsvm").load(base_dir + "/data/mllib/sample_libsvm_data.txt")
-
-dataBr = spark.sparkContext.broadcast(data.collect())
+labels = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
 
 
-def train5(row):
-    X = []
-    y = []
-    for i in dataBr.value:
-        X.append(i["features"])
-        y.append(i["label"])
-    if row["model"] == "xgboost":
-        xgb_model = xgb.XGBClassifier().fit(np.array(X), np.array(y))
-        # xgb_model.save_model('0001.model')
-        # # read file
-        # with open('0001.model', 'rb') as f:
-        #     bgdata = f.read()
-        pickled = codecs.encode(pickle.dumps(xgb_model), "base64").decode()
-        return [row["model"], pickled]
+# train_images_df = imageIO.readImagesWithCustomFn(base_dir, decode_f=imageIO.PIL_decode)
+@F.udf('int')
+def extract_label(v):
+    return labels.index(v.split("_")[2].split(".")[0])
 
 
-rdd = spark.createDataFrame([["xgboost"]], ["model"]).rdd.map(train5)
-spark.createDataFrame(rdd, schema=StructType([StructField(name="modelType", dataType=StringType()),
-                                              StructField(name="modelBinary", dataType=StringType())])).write. \
-    format("parquet"). \
-    mode("overwrite").save("/tmp/wow")
+train_images_df = ImageSchema.readImages(base_dir, sampleRatio=0.4, numPartitions=4).withColumn("label",
+                                                                                                extract_label(F.col(
+                                                                                                    "image.origin")))
+train_images_df.show(10)
 
-# 理论上是两条记录
-models = spark.read.parquet("/tmp/wow").collect()
-svc = [x for x in models if x["modelType"] == "xgboost"][0]["modelBinary"]
+featurizer = DeepImageFeaturizer(inputCol="image", outputCol="features", modelName="InceptionV3")
+lr = LogisticRegression(maxIter=20, regParam=0.05, elasticNetParam=0.3, labelCol="label")
+p = Pipeline(stages=[featurizer, lr])
 
-svcBr = spark.sparkContext.broadcast(svc)
+model = p.fit(train_images_df)  # train_images_df is a dataset of images and labels
 
-
-def preidct(items):
-    # with open('0001.model', 'wb') as f:
-    #     f.write(codecs.decode(svcBr.value.encode(), "base64"))
-    #
-    # bst = xgb.Booster()  # init model
-    # model = bst.load_model('0001.model')
-    model = pickle.loads(codecs.decode(svcBr.value.encode(), "base64"))
-    for item in items:
-        yield [model.predict(np.array([item["features"]]))[0].item(), item["label"]]
-
-
-spark.createDataFrame(data.rdd.mapPartitions(preidct), ["predict_label", "real_label"]).show()
+# Inspect training error
+df = model.transform(train_images_df.limit(10)).select("image", "probability", "uri", "label")
+predictionAndLabels = df.select("prediction", "label")
+evaluator = MulticlassClassificationEvaluator(metricName="accuracy")
+print("Training set accuracy = " + str(evaluator.evaluate(predictionAndLabels)))
