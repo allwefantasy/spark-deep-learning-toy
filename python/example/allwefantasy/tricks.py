@@ -72,10 +72,22 @@ class PySparkOptimize(_SparkBase):
         TimeProfile.profile(lambda: df.toPandas())()
         TimeProfile.print_prof_data(clear=True)
 
+    # pandas_udf 返回值的疑惑，我们这里解释下
+    def trick4(self):
+        df = self.session.createDataFrame(
+            [(1, 1.0), (1, 2.0), (2, 3.0), (2, 5.0), (2, 10.0)], ("id", "v"))
+
+        @F.pandas_udf("id long", F.PandasUDFType.GROUPED_MAP)  # doctest: +SKIP
+        def normalize(pdf):
+            v = pdf.v
+            return pdf.assign(v=(v - v.mean()) / v.std())[["id"]]
+
+        df.groupby("id").apply(normalize).show()  # doctest: +SKIP
+
 
 if __name__ == '__main__':
     conf = SparkConf()
     conf.set("spark.sql.execution.arrow.enabled", "true")
     PySparkOptimize.start(conf=conf)
-    PySparkOptimize().trick2()
+    PySparkOptimize().trick4()
     PySparkOptimize.shutdown()

@@ -23,11 +23,11 @@ labels = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse
 def extract_label(v):
     return labels.index(v.split("_")[2].split(".")[0])
 
-
+# 图片非常消耗资源，该怎么办？
 train_images_df = ImageSchema.readImages(base_dir, sampleRatio=0.4, numPartitions=4).withColumn("label",
                                                                                                 extract_label(F.col(
                                                                                                     "image.origin")))
-train_images_df.show(10)
+# train_images_df.show(10)
 
 featurizer = DeepImageFeaturizer(inputCol="image", outputCol="features", modelName="InceptionV3")
 lr = LogisticRegression(maxIter=20, regParam=0.05, elasticNetParam=0.3, labelCol="label")
