@@ -16,7 +16,10 @@ class DataframeExample(_SparkBase):
         )
 
     def select_usage(self):
-        self.df.groupBy(F.col("a1")).agg(F.count("b1").alias("b1count")).select(F.col("a1"), F.col("b1count")).show()
+        self.df.groupBy(F.col("a1")).\
+            agg(F.count("b1").alias("b1count")).\
+            select(F.col("a1"), F.col("b1count")).\
+            show()
 
     def udf_usage(self):
         def concat(column, wow):
@@ -30,7 +33,7 @@ class DataframeExample(_SparkBase):
             return column + ":" + str(wow)
 
         concat_udf = F.udf(concat, StringType())
-        self.df.withColumn("a1", concat_udf(F.col("a1"), F.lit(1))).show()
+        self.df.withColumn("a1", concat_udf(F.col("a1"), F.lit("-"))).show()
         # 如果我要修改所有列/很多列怎么办？
         expres = [(column, concat_udf(F.col(column))) for column in self.df.schema.fields]
         newdf = self.df
@@ -78,5 +81,5 @@ class DataframeExample(_SparkBase):
 
 if __name__ == '__main__':
     DataframeExample.start()
-    DataframeExample().sql_dataframe()
+    DataframeExample().with_column_usage()
     DataframeExample.shutdown()

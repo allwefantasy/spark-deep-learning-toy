@@ -1,3 +1,3 @@
 class Job(object):
     def echo(self, m):
-        return m
+        return m + ":job"

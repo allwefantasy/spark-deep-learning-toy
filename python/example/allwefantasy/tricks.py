@@ -33,12 +33,12 @@ class PySparkOptimize(_SparkBase):
         TimeProfile.print_prof_data(clear=True)
 
     # 尝试换成arrow
-    def trick4(self):
-        df = self.session.range(0, 1000000).select("id", F.rand(seed=10).alias("uniform"),
-                                                   F.randn(seed=27).alias("normal"))
-        # 更少的内存和更快的速度
-        TimeProfile.profile(lambda: df.toPandas())()
-        TimeProfile.print_prof_data(clear=True)
+    # def trick4(self):
+    #     df = self.session.range(0, 1000000).select("id", F.rand(seed=10).alias("uniform"),
+    #                                                F.randn(seed=27).alias("normal"))
+    #     # 更少的内存和更快的速度
+    #     TimeProfile.profile(lambda: df.toPandas())()
+    #     TimeProfile.print_prof_data(clear=True)
 
     # 聚合函数处理
     def trick2(self):
@@ -89,5 +89,5 @@ if __name__ == '__main__':
     conf = SparkConf()
     conf.set("spark.sql.execution.arrow.enabled", "true")
     PySparkOptimize.start(conf=conf)
-    PySparkOptimize().trick4()
+    PySparkOptimize().trick3()
     PySparkOptimize.shutdown()

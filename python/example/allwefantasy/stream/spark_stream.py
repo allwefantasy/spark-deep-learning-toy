@@ -39,6 +39,6 @@ def func2(rdd):
     sqlContext.sql("select content from data").show()
 
 
-dStream.map(lambda line: line).foreachRDD(func2)
+dStream.map(lambda line: line).foreachRDD(func)
 ssc.start()
 ssc.awaitTermination()

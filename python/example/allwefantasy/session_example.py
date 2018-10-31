@@ -31,11 +31,13 @@ data = session.read.csv(
 data = session.read.format("csv").option("encoding", "utf-8").option("header", "true").load(
     csv_file)
 # or
-data = session.read.format("csv").options(encoding="utf-8", header=True).load(csv_file)
+data = session.read.format("csv").options(encoding="utf-8", header=True).\
+    load(csv_file)
 
 # 非结构化数据读取
 # os.environ["PYSPARK_PYTHON"] = "/Users/allwefantasy/deepavlovpy3/bin/python3"
-rdd = session.sparkContext.textFile(base_dir + "/data/raw_file.txt").map(lambda line: line.split(","))
+rdd = session.sparkContext.textFile(base_dir + "/data/raw_file.txt").\
+    map(lambda line: line.split(","))
 data = session.createDataFrame(rdd, StructType([
     StructField(name="a1", dataType=StringType()),
     StructField(name="a2", dataType=StringType()),

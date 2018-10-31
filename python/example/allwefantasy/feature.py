@@ -2,7 +2,7 @@ import logging
 from random import Random
 
 import pyspark.sql.functions as F
-from pyspark import SparkConf
+from pyspark import SparkConf, SparkContext
 from pyspark.ml.feature import ImputerModel, MinMaxScaler, MaxAbsScaler, QuantileDiscretizer
 from pyspark.ml.linalg import VectorUDT
 from pyspark.sql.types import *
@@ -179,10 +179,80 @@ class FeatureExample(_SparkBase):
         result = discretizer.fit(df).transform(df)
         result.show()
 
+    def onehot(self):
+        from pyspark.ml.feature import OneHotEncoderEstimator
+
+        df = self.session.createDataFrame([
+            (0.0, 1.0),
+            (1.0, 0.0),
+            (2.0, 1.0),
+            (0.0, 2.0),
+            (0.0, 1.0),
+            (2.0, 0.0)
+        ], ["categoryIndex1", "categoryIndex2"])
+
+        encoder = OneHotEncoderEstimator(inputCols=["categoryIndex1", "categoryIndex2"],
+                                         outputCols=["categoryVec1", "categoryVec2"])
+        model = encoder.fit(df)
+        encoded = model.transform(df)
+        encoded.show()
+
+    def vectorCategory(self):
+        from pyspark.ml.feature import VectorIndexer
+
+        data = self.session.read.format("libsvm").load(self.dataDir + "/data/mllib/sample_libsvm_data.txt")
+
+        indexer = VectorIndexer(inputCol="features", outputCol="indexed", maxCategories=10)
+        indexerModel = indexer.fit(data)
+
+        categoricalFeatures = indexerModel.categoryMaps
+        print("Chose %d categorical features: %s" %
+              (len(categoricalFeatures), ", ".join(str(k) for k in categoricalFeatures.keys())))
+
+        # Create new column "indexed" with categorical values transformed to indices
+        indexedData = indexerModel.transform(data)
+        indexedData.show()
+
+        ## 问题来了，那我们怎么能够多个字段转化一个vector字段么？
+        from pyspark.ml.linalg import Vectors
+        from pyspark.ml.feature import VectorAssembler
+
+        dataset = self.session.createDataFrame(
+            [(0, 18, 1.0, Vectors.dense([0.0, 10.0, 0.5]), 1.0)],
+            ["id", "hour", "mobile", "userFeatures", "clicked"])
+
+        assembler = VectorAssembler(
+            inputCols=["hour", "mobile", "userFeatures"],
+            outputCol="features")
+
+        output = assembler.transform(dataset)
+        print("Assembled columns 'hour', 'mobile', 'userFeatures' to vector column 'features'")
+        output.select("features", "clicked").show(truncate=False)
+
+    def stringIndexer(self):
+        from pyspark.ml.feature import StringIndexer
+
+        df = self.session.createDataFrame(
+            [(0, "a"), (1, "b"), (2, "c"), (3, "a"), (4, "a"), (5, "c")],
+            ["id", "category"])
+
+        indexer = StringIndexer(inputCol="category", outputCol="categoryIndex")
+        indexed = indexer.fit(df).transform(df)
+        indexed.show()
+
+        # 来一个刺激的 我想拿到StringIndexer里完整映射关系怎么办？
+        labels = indexer.fit(df)._call_java("labels")
+        # sc = SparkContext._active_spark_context
+        # java_array = sc._jvm.
+
+        # labelToIndex = indexer.fit(df)._call_java("labelToIndex")
+        print(labels)
+        # print(labelToIndex)
+
 
 if __name__ == '__main__':
     conf = SparkConf()
     conf.set("spark.sql.execution.arrow.enabled", "true")
     FeatureExample.start(conf=conf)
-    FeatureExample().standardScaler()
+    FeatureExample().stringIndexer()
     FeatureExample.shutdown()

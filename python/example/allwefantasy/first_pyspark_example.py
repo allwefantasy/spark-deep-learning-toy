@@ -25,7 +25,19 @@ class _SparkExample(_SparkBase):
         def concat(a, b):
             return str(a) + str(b)
 
-        document_df.select(F.udf(concat)(F.col("policyID"), F.col("statecode"))).show(truncate=False)
+        # document_df.select(F.udf(concat)(F.col("policyID"), F.col("statecode"))).show(truncate=False)
+        table = {
+            "abc": "jack",
+            "jack": "abc"
+        }
+
+        def jack(f):
+            return table["abc"]
+
+        items1 = self.sc.textFile(self.dataDir + "/data/FL_insurance_sample.csv"). \
+            map(jack)
+
+        print(items1.collect())
 
     def csv_without_head(self):
         document_df = self.session.read.csv(
@@ -40,11 +52,15 @@ class _SparkExample(_SparkBase):
     def find_bug(self):
         buffer = []
 
-        self.sc.textFile(self.dataDir + "/data/raw_file.txt"). \
+        def abc(item):
+            buffer.append(item)
+            return item
+
+        rdd1 = self.sc.textFile(self.dataDir + "/data/raw_file.txt"). \
             map(lambda f: f.split(",")). \
             filter(lambda f: len(f) > 0). \
-            map(lambda f: buffer.append(f))
-
+            map(lambda f: abc(f))
+        print(rdd1.collect())
         logger.warn("--------------")
         for item in buffer:
             print(item)
@@ -139,5 +155,5 @@ class _SparkExample(_SparkBase):
 
 if __name__ == '__main__':
     _SparkExample.start()
-    _SparkExample().how_to_create_data_from_non_rdd()
+    _SparkExample().broadcast()
     _SparkExample.shutdown()
